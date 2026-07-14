@@ -12,7 +12,7 @@
 #   VIVADO_WORKDIR       scratch for extraction        [optional; default $TMPDIR/...]
 #
 # Requires `programs.nix-ld.enable = true` on the host. Read valid module names
-# from `vivado-nix.lib.catalog.allModules`.
+# from `vivado-nix.lib.catalog.<version>.allModules`.
 {
   lib,
   pkgs,
@@ -28,6 +28,9 @@
   procps,
   glibc,
   # --- Logical options (set from the flake's mkVivado) ----------------------
+  # Vivado version — selects the per-version catalog and the <version>/Vivado
+  # install subdir (so multiple versions coexist side by side).
+  version,
   # Default to Enterprise: the free Standard edition installs Virtex UltraScale+
   # devices (e.g. xcux35 / Alveo X3522) as NON-TIMING — synthesis works but
   # implementation dies with "Cannot run timing on a non-timing device". The
@@ -35,13 +38,14 @@
   # synth->P&R->bitstream. No paid .lic is needed. Use "Vivado ML Standard" for
   # 7-series-only installs.
   edition ? "Vivado ML Enterprise",
-  enabledModules ? null, # null -> options.nix defaultEnabledModules
+  # Device families to install; NO default — a consumer must opt in.
+  enabledModules ? null, # null -> none (device-less install)
   # --- Optional build-time fallbacks for the machine-path env vars ----------
   installRoot ? null,
   installerTar ? null,
   workDir ? null,
 }: let
-  opts = import ./options.nix;
+  opts = (import ./options.nix).${version};
   fhsLibs = import ./fhs-libs.nix pkgs;
   ldLibraryPath = lib.makeLibraryPath fhsLibs;
 
@@ -61,7 +65,7 @@
 
   selected =
     if enabledModules == null
-    then opts.defaultEnabledModules
+    then []
     else enabledModules;
 
   # Validate selections against the catalog so a typo fails at eval, not mid-install.
@@ -98,7 +102,7 @@ in
       workdir="''${VIVADO_WORKDIR:-${workDirFallback}}"
       setupdir="$workdir/${opts.installerDir}"
 
-      echo ">> vivado-install ${opts.version} — edition '${edition}' -> $dest"
+      echo ">> vivado-install ${version} — edition '${edition}' -> $dest"
       echo ">> modules enabled: ${lib.concatStringsSep ", " selected}"
 
       if [ ! -f "$installer_tar" ]; then
@@ -165,7 +169,7 @@ in
         echo ">> (xsetup returned non-zero; verifying result anyway)"
       fi
 
-      vivado_bin="$dest/${opts.version}/Vivado/bin/vivado"
+      vivado_bin="$dest/${version}/Vivado/bin/vivado"
       if [ ! -x "$vivado_bin" ]; then
         echo "ERROR: install did not produce $vivado_bin — see the installer log in" >&2
         echo "       $HOME/.Xilinx/xinstall/ (look for 'native libs' / shebang errors)." >&2
@@ -175,7 +179,7 @@ in
       echo ">> run it with:  nix run <this-flake>#vivado -- -version"
     '';
 
-    meta = with lib; {
+    meta = {
       description = "One-time outside-nix installer for Vivado (device-limited, nix-ld driven)";
       platforms = ["x86_64-linux"];
       mainProgram = "vivado-install";

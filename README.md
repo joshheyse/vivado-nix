@@ -56,8 +56,9 @@ nix run github:joshheyse/vivado-nix#vivado          # interactive
     pkgs = import nixpkgs { inherit system; };
 
     vivado = vivado-nix.lib.mkVivado {
-      edition        = "Vivado ML Enterprise";              # or "Vivado ML Standard"
-      enabledModules = [ "Virtex UltraScale+ 58G FPGAs" ];  # see lib.catalog.allModules
+      version        = "2025.2";                             # see lib.versions
+      edition        = "Vivado ML Enterprise";               # or "Vivado ML Standard"
+      enabledModules = [ "Virtex UltraScale+ 58G FPGAs" ];   # required; lib.catalog.<version>.allModules
 
       # Optional: bake this host's defaults for the env vars below, so it works
       # without exporting anything. Still overridable at runtime.
@@ -79,8 +80,9 @@ baked into the store:
 
 | option (`mkVivado` arg) | meaning | default |
 |---|---|---|
+| `version` | Vivado version; installs under `<root>/<version>/` so releases coexist side by side (`lib.versions`) | `2025.2` |
 | `edition` | `Vivado ML Standard` \| `Vivado ML Enterprise` | Enterprise |
-| `enabledModules` | device families to install (`lib.catalog.allModules`) | on-hand set |
+| `enabledModules` | device families to install (`lib.catalog.<version>.allModules`) | **none** — you must opt in |
 | `installRoot` / `installerTar` / `workDir` | fallbacks for the env vars below | none |
 
 | env var | meaning | required |

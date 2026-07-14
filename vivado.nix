@@ -18,15 +18,16 @@
   pkgs,
   buildFHSEnv,
   writeShellScript,
+  # Vivado version — selects the <version>/Vivado subdir under the install root,
+  # so multiple versions coexist side by side.
+  version,
   # Optional build-time fallback for $VIVADO_INSTALL_ROOT. null => require the
   # env var at runtime (the default; keeps machine paths out of the store).
   installRoot ? null,
   # The matching `vivado-install` derivation, surfaced via passthru.
   installTool ? null,
 }: let
-  opts = import ./options.nix;
   fhsLibs = import ./fhs-libs.nix pkgs;
-  version = opts.version;
   installRootFallback =
     if installRoot == null
     then ""
@@ -65,7 +66,7 @@ in
       {inherit installRoot;}
       // lib.optionalAttrs (installTool != null) {inherit installTool;};
 
-    meta = with lib; {
+    meta = {
       description = "AMD/Xilinx Vivado ${version} (FHS wrapper over an out-of-store install)";
       homepage = "https://www.xilinx.com/products/design-tools/vivado.html";
       # Store contents are just the wrapper + free FHS libs; unfree Vivado lives
