@@ -10,10 +10,10 @@
     pkgs = import nixpkgs {inherit system;};
     inherit (nixpkgs) lib;
 
-    # Per-version installer catalogs (modules, editions, installer dir), keyed
+    # Per-version installer catalogs (installer dir, per-edition modules), keyed
     # by version string. Consumers read valid module names from
-    # `vivado-nix.lib.catalog.<version>.allModules`, and available versions from
-    # `vivado-nix.lib.versions`.
+    # `vivado-nix.lib.catalog.<version>.editions.<edition>`, and available
+    # versions from `vivado-nix.lib.versions`.
     catalog = import ./options.nix;
 
     # Builder — the configuration surface. A consumer's flake calls this with
@@ -25,14 +25,14 @@
     #
     #   vivado-nix.lib.mkVivado {
     #     version        = "2025.2";                            # side-by-side installs
-    #     edition        = "Vivado ML Enterprise";
+    #     edition        = "Vivado ML Enterprise";              # default: catalog's defaultEdition
     #     enabledModules = [ "Virtex UltraScale+ 58G FPGAs" "Artix-7 FPGAs" ];
     #   }
     #   => { vivado, vivado-install }
     mkVivado = {
       version ? "2025.2",
-      edition ? "Vivado ML Enterprise",
-      enabledModules ? null, # null -> that version's defaultEnabledModules
+      edition ? null, # null -> that version's defaultEdition
+      enabledModules ? null, # null -> no device modules
       # Optional build-time fallbacks for the machine-path env vars.
       installRoot ? null,
       installerTar ? null,

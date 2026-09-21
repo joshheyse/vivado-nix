@@ -9,7 +9,8 @@
 # No machine path is baked in — the install location is a property of the host
 # (set VIVADO_INSTALL_ROOT in your NixOS/home config), so the same store-built
 # wrapper works regardless of where the install lives. `installRoot` is an
-# optional build-time fallback for that env var.
+# optional build-time fallback for that env var. `VIVADO_VERSION` selects among
+# side-by-side installs at runtime, defaulting to `version`.
 #
 # It's a drop-in `vivado` — `vivado -version`, interactive `vivado`, and a
 # Makefile that calls `vivado -mode batch ...` all work.
@@ -18,8 +19,8 @@
   pkgs,
   buildFHSEnv,
   writeShellScript,
-  # Vivado version — selects the <version>/Vivado subdir under the install root,
-  # so multiple versions coexist side by side.
+  # Default Vivado version — selects the <version>/Vivado subdir under the
+  # install root unless $VIVADO_VERSION overrides it.
   version,
   # Optional build-time fallback for $VIVADO_INSTALL_ROOT. null => require the
   # env var at runtime (the default; keeps machine paths out of the store).
@@ -49,7 +50,7 @@ in
         echo "        environment.sessionVariables in your NixOS config)." >&2
         exit 1
       fi
-      vroot="$root/${version}/Vivado"
+      vroot="$root/''${VIVADO_VERSION:-${version}}/Vivado"
       if [ ! -e "$vroot/settings64.sh" ]; then
         echo "vivado: no install at $vroot" >&2
         echo "        install once with:  nix run <this-flake>#vivado-install" >&2

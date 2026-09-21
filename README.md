@@ -17,13 +17,11 @@ FHS libraries — no vendor blob, and no machine-specific paths.
 | `vivado.nix` | the drop-in `vivado` FHS wrapper |
 | `install-tool.nix` | `vivado-install` — one-time installer driver |
 | `options.nix` | installer catalog: version, editions, selectable device modules |
-| `fhs-libs.nix` | shared native-lib set for the FHS / nix-ld |
+| `fhs-libs.nix` | shared native-lib set for the installer and wrapper FHS envs |
 
 ## Requirements
 
 - **x86_64-linux** (Vivado is x86_64 only).
-- **`programs.nix-ld.enable = true`** on the host — the installer runs AMD's own
-  binaries directly.
 - The AMD **unified installer `.tar`**, downloaded from AMD (login required).
   Note it's a plain tar even though AMD sometimes names it `.tar.gz`.
 
@@ -57,8 +55,8 @@ nix run github:joshheyse/vivado-nix#vivado          # interactive
 
     vivado = vivado-nix.lib.mkVivado {
       version        = "2025.2";                             # see lib.versions
-      edition        = "Vivado ML Enterprise";               # or "Vivado ML Standard"
-      enabledModules = [ "Virtex UltraScale+ 58G FPGAs" ];   # required; lib.catalog.<version>.allModules
+      edition        = "Vivado ML Enterprise";               # lib.catalog.<version>.editions
+      enabledModules = [ "Virtex UltraScale+ 58G FPGAs" ];   # lib.catalog.<version>.editions.<edition>
 
       # Optional: bake this host's defaults for the env vars below, so it works
       # without exporting anything. Still overridable at runtime.
@@ -81,8 +79,8 @@ baked into the store:
 | option (`mkVivado` arg) | meaning | default |
 |---|---|---|
 | `version` | Vivado version; installs under `<root>/<version>/` so releases coexist side by side (`lib.versions`) | `2025.2` |
-| `edition` | `Vivado ML Standard` \| `Vivado ML Enterprise` | Enterprise |
-| `enabledModules` | device families to install (`lib.catalog.<version>.allModules`) | **none** — you must opt in |
+| `edition` | an attribute of `lib.catalog.<version>.editions` | the version's `defaultEdition` |
+| `enabledModules` | device families to install (`lib.catalog.<version>.editions.<edition>`) | **none** — you must opt in |
 | `installRoot` / `installerTar` / `workDir` | fallbacks for the env vars below | none |
 
 | env var | meaning | required |
@@ -90,6 +88,7 @@ baked into the store:
 | `VIVADO_INSTALL_ROOT` | where the install lives (wrapper + installer) | yes* |
 | `VIVADO_INSTALLER_TAR` | the AMD unified installer `.tar` | installer only* |
 | `VIVADO_WORKDIR` | extraction scratch | no (default `$TMPDIR/vivado-extract`) |
+| `VIVADO_VERSION` | which installed `<root>/<version>` the `vivado` wrapper runs | no (default: `mkVivado`'s `version`) |
 
 \* unless a fallback was baked via the matching `mkVivado` arg. A natural home
 for these on NixOS is `environment.sessionVariables`, since they describe the
@@ -100,13 +99,18 @@ machine, not the project.
 - **Not pure/reproducible, on purpose.** The install is out-of-store imperative
   state Nix doesn't track; `nix build .#vivado` only builds the wrapper.
   Reproduce the install by re-running `vivado-install`, not a Nix build.
-- **Edition matters, a paid license may not.** Virtex UltraScale+ devices
-  install as *non-timing* under Standard (synthesis only); Enterprise ships the
-  timing data and the built-in entitlement covers full place-and-route +
-  bitstream — no paid `.lic` needed. Hence the Enterprise default. Small
-  7-series parts work fine under Standard.
-- **Bumping the installer version:** edit `options.nix` (`version`,
-  `installerDir`, and regenerate `allModules` via `xsetup -b ConfigGen`).
+- **Edition matters, a paid license may not.** In 2025.2, Virtex UltraScale+
+  devices install as *non-timing* under Standard (synthesis only); Enterprise
+  ships the timing data and the built-in entitlement covers full
+  place-and-route + bitstream — no paid `.lic` needed. Hence the Enterprise
+  default. Enterprise also offers more modules (94 vs 26). 2026.1 has a single
+  `Vivado Design Suite` edition.
+- **Adding an installer version:** add an `options.nix` entry with its
+  `installerDir`, `defaultEdition`, and each edition's module list from
+  `xsetup -b ConfigGen` (run once per edition).
+- **Multiple versions:** call `mkVivado` once per version for its
+  `vivado-install`; any one `vivado` wrapper runs whichever installed version
+  `VIVADO_VERSION` names.
 
 ## License
 
