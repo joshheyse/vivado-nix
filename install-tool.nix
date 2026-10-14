@@ -101,6 +101,24 @@ in
         fi
         workdir="''${VIVADO_WORKDIR:-${workDirFallback}}"
         setupdir="$workdir/${opts.installerDir}"
+        vivado_bin="$dest/${version}/Vivado/bin/vivado"
+        modules_record="$dest/.xinstall/${version}/data/instRecord.dat"
+        selected_modules=( ${lib.concatMapStringsSep " " lib.escapeShellArg selected} )
+
+        modules_installed() {
+          [ -f "$modules_record" ] || return 1
+          local line module found
+          for module in "''${selected_modules[@]}"; do
+            found=false
+            while IFS= read -r line; do
+              if [[ "$line" == *"<value>$module</value>"* ]]; then
+                found=true
+                break
+              fi
+            done < "$modules_record"
+            "$found" || return 1
+          done
+        }
 
         echo ">> vivado-install ${version} — edition '${selectedEdition}' -> $dest"
         echo ">> modules enabled: ${lib.concatStringsSep ", " selected}"
@@ -136,23 +154,41 @@ in
         echo ">> config written to $cfg"
 
         # --- run the batch install ---------------------------------------------
-        # NOTE: xsetup exits 0 even when its Java installer dies, so we cannot
-        # trust its return code — verify the vivado binary exists afterwards.
-        echo ">> installing to $dest ..."
+        # Adding modules must use the maintenance launcher from the installed
+        # tree. The distribution launcher always treats itself as fresh media.
+        if [ -x "$vivado_bin" ] && modules_installed; then
+          echo ">> requested modules are already installed"
+          exit 0
+        elif [ -x "$vivado_bin" ]; then
+          action=Add
+          xsetup="$dest/.xinstall/${version}/xsetup"
+          echo ">> adding modules to existing Vivado ${version} at $dest ..."
+          if [ ! -x "$xsetup" ]; then
+            echo "ERROR: existing install has no maintenance launcher at $xsetup" >&2
+            exit 1
+          fi
+        else
+          action=Install
+          xsetup=./xsetup
+          echo ">> installing Vivado ${version} to $dest ..."
+        fi
+
+        # xsetup can exit zero after its Java installer fails, so independently
+        # verify both the executable and AMD's installed-module record below.
         # shellcheck disable=SC2016
         if ! ${installerFhs}/bin/vivado-installer-fhs -c \
-          'cd "$1" && ./xsetup -a XilinxEULA,3rdPartyEULA -b Install -c "$2"' \
-          _ "$setupdir" "$cfg"; then
+          'cd "$1" && bash "$2" -a XilinxEULA,3rdPartyEULA -b "$3" -c "$4"' \
+          _ "$setupdir" "$xsetup" "$action" "$cfg"; then
           echo ">> (xsetup returned non-zero; verifying result anyway)"
         fi
 
-        vivado_bin="$dest/${version}/Vivado/bin/vivado"
-        if [ ! -x "$vivado_bin" ]; then
-          echo "ERROR: install did not produce $vivado_bin — see the installer log in" >&2
-          echo "       ~/.Xilinx/xinstall/ (look for 'native libs' errors)." >&2
+        if [ ! -x "$vivado_bin" ] || ! modules_installed; then
+          echo "ERROR: installer did not provide all requested modules in $dest/${version}/Vivado" >&2
+          echo "       Expected module record: $modules_record" >&2
+          echo "       See ~/.Xilinx/xinstall/ for the installer log." >&2
           exit 1
         fi
-        echo ">> installed OK: $vivado_bin"
+        echo ">> requested modules installed OK: $vivado_bin"
         echo ">> run it with:  nix run <this-flake>#vivado -- -version"
       '';
 
